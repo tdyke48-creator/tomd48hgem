@@ -32,6 +32,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add seen_jobs.json auth_status.json
+          [ -f seen_jobs.json ] && git add seen_jobs.json
+          [ -f auth_status.json ] && git add auth_status.json
           git diff --quiet --cached || git commit -m "Update seen jobs state"
           git push
