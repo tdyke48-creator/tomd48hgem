@@ -11,7 +11,7 @@ AUTH_STATUS_FILE = "auth_status.json"
 # wait between checks. Scheduled runs fire every 5 minutes, so this loop
 # covers that whole window in ~60 second steps, leaving a safety margin
 # before the next scheduled run starts.
-CHECK_INTERVAL_SECONDS = int(os.environ.get("CHECK_INTERVAL_SECONDS", "30"))
+CHECK_INTERVAL_SECONDS = int(os.environ.get("CHECK_INTERVAL_SECONDS", "15"))
 TOTAL_RUNTIME_SECONDS = int(os.environ.get("TOTAL_RUNTIME_SECONDS", "270"))
 
 API_URL = (
