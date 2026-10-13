@@ -30,7 +30,7 @@ jobs:
           AUTH_TOKEN: ${{ secrets.AUTH_TOKEN }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           AUTO_BOOK: "on"
-          DRY_RUN: "on"
+          DRY_RUN: "off"
         run: python check_jobs.py
 
       - name: Commit updated state
