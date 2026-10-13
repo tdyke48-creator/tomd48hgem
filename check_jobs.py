@@ -28,11 +28,54 @@ DRY_RUN = os.environ.get("DRY_RUN", "on") == "on"
 MAX_BOOKINGS_PER_RUN = 1
 
 # Normal jobs: vendors to book, and how far away they can be
-WANTED_CLIENTS = []            # e.g. ["Salad Project", "Loungers"]
+WANTED_CLIENTS = [
+    "Cosy Club",
+    "Malmaison",
+    "Hotel du Vin",
+    "Loungers",
+    "The Lounges",
+    "Vapiano",
+    "Country Village Inns",
+    "Coaching Inn Group",
+    "The Coaching Inn Group",
+    "Longbow Venues",
+    "Troia",
+    "Botanist",
+    "The Botanist",
+    "New World Trading Company",
+    "Cherry Tree",
+    "The Cherry Tree",
+    "Q Hotels",
+    "Cut and Craft",
+    "The Cut and Craft",
+    "The Cut & Craft",
+    "Cut & Craft",
+    
+                 ]            # e.g. ["Salad Project", "Loungers"]
 MAX_DISTANCE_KM = 70
 
 # Hotel jobs (any listing that says "overnight stay")
-WANTED_HOTEL_CLIENTS = []      # e.g. ["Hotel Vendor One", "Hotel Vendor Two"]
+WANTED_HOTEL_CLIENTS = [
+    "Malmaison",
+    "Hotel du Vin",
+    "Country Village Inns",
+    "Coaching Inn Group",
+    "The Coaching Inn Group",
+    "Q Hotels",
+    "Dakota Hotels",
+    "Leonardo",
+    "Hyll Hotel",
+    "Andrew Brownsword Hotels",
+    "Champneys Resorts",
+    "Champneys",
+    "Chapneys Hotels",
+    "Firmdale Hotels",
+    "Andrew Brownsword",
+    "Guest House",
+    "Guest House Hotels",
+    "Cameron House",
+    "Cameron House On Loch Lomond",
+]      # e.g. ["Hotel Vendor One", "Hotel Vendor Two"]
 HOTEL_MAX_DISTANCE_KM = 500    # 0 means no limit at all
 HOTEL_DAYS = ["Friday", "Saturday"]
 
