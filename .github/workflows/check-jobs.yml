@@ -8,6 +8,9 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: check-jobs
+  cancel-in-progress: false
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -26,6 +29,8 @@ jobs:
         env:
           AUTH_TOKEN: ${{ secrets.AUTH_TOKEN }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          AUTO_BOOK: "on"
+          DRY_RUN: "on"
         run: python check_jobs.py
 
       - name: Commit updated state
