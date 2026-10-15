@@ -50,6 +50,7 @@ WANTED_CLIENTS = [
     "The Cut and Craft",
     "The Cut & Craft",
     "Cut & Craft",
+    "Lake Vyrnwy Hotel & Spa",
     
                  ]            # e.g. ["Salad Project", "Loungers"]
 MAX_DISTANCE_KM = 70
@@ -75,6 +76,7 @@ WANTED_HOTEL_CLIENTS = [
     "Guest House Hotels",
     "Cameron House",
     "Cameron House On Loch Lomond",
+    "Lake Vyrnwy Hotel & Spa",
 ]      # e.g. ["Hotel Vendor One", "Hotel Vendor Two"]
 HOTEL_MAX_DISTANCE_KM = 500    # 0 means no limit at all
 HOTEL_DAYS = ["Friday", "Saturday"]
