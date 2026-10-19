@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 import json
 import time
 import requests
@@ -7,6 +8,8 @@ from datetime import date, timedelta
 
 STATE_FILE = "seen_jobs.json"
 AUTH_STATUS_FILE = "auth_status.json"
+DATES_FILE = "job_dates.json"
+BOOKED_FILE = "booked_jobs.json"
 
 CHECK_INTERVAL_SECONDS = int(os.environ.get("CHECK_INTERVAL_SECONDS", "15"))
 TOTAL_RUNTIME_SECONDS = int(os.environ.get("TOTAL_RUNTIME_SECONDS", "270"))
@@ -15,7 +18,7 @@ API_URL = (
     "https://production-gateways.hgem.com/diner-gateway/guestservices-visitsapi/AvailableVisits"
     "?CurrentPosition.Latitude=53.263099670410156"
     "&CurrentPosition.Longitude=-2.9160826206207275"
-    "&pageStart=0&pageSize=50&DateFilterType=0&FilterType=0&SortType=0"
+    "&pageStart=0&pageSize=200&DateFilterType=0&FilterType=0&SortType=0"
 )
 BOOK_URL = "https://production-gateways.hgem.com/diner-gateway/guestservices-visitsapi/AvailableVisits/Book"
 
@@ -51,9 +54,13 @@ WANTED_CLIENTS = [
     "The Cut & Craft",
     "Cut & Craft",
     "Lake Vyrnwy Hotel & Spa",
-    
-                 ]            # e.g. ["Salad Project", "Loungers"]
+]
 MAX_DISTANCE_KM = 70
+
+# Vendors allowed to be further away than the normal limit (in km)
+VENDOR_MAX_KM = {
+    "Longbow Venues": 120,
+}
 
 # Hotel jobs (any listing that says "overnight stay")
 WANTED_HOTEL_CLIENTS = [
@@ -77,9 +84,12 @@ WANTED_HOTEL_CLIENTS = [
     "Cameron House",
     "Cameron House On Loch Lomond",
     "Lake Vyrnwy Hotel & Spa",
-]      # e.g. ["Hotel Vendor One", "Hotel Vendor Two"]
+]
 HOTEL_MAX_DISTANCE_KM = 500    # 0 means no limit at all
 HOTEL_DAYS = ["Friday", "Saturday"]
+
+# Venues you never want booked automatically (part of the venue name is enough)
+NEVER_BOOK_VENUES = []         # e.g. ["Bakewell", "Notting Hill"]
 
 # Applies to everything
 MIN_DAYS_AHEAD = 11            # only book visits at least this many days away
@@ -148,14 +158,23 @@ def pick_date(job, allowed_days=None):
 
 def find_booking_date(job):
     """Returns the date to book if the job passes every rule, otherwise None."""
+    client = (job.get("clientName") or "").lower()
+    venue = (job.get("visitName") or "").lower()
+
+    if any(b.lower() in venue for b in NEVER_BOOK_VENUES):
+        return None
+
     if is_hotel_job(job):
         wanted, max_km, allowed_days = WANTED_HOTEL_CLIENTS, HOTEL_MAX_DISTANCE_KM, HOTEL_DAYS
     else:
         wanted, max_km, allowed_days = WANTED_CLIENTS, MAX_DISTANCE_KM, None
 
-    client = (job.get("clientName") or "").lower()
     if not wanted or not any(w.lower() in client for w in wanted):
         return None
+
+    for name, km in VENDOR_MAX_KM.items():
+        if name.lower() in client and max_km:
+            max_km = max(max_km, km)
 
     if max_km:
         distance = job.get("distance")
@@ -195,6 +214,8 @@ def book_job(job, chosen_date):
 def check_once():
     global bookings_made
     seen_ids = set(load_json(STATE_FILE, []))
+    booked_ids = set(load_json(BOOKED_FILE, []))
+    old_counts = load_json(DATES_FILE, {})
     auth_status = load_json(AUTH_STATUS_FILE, {"last_fail_date": None})
 
     headers = {
@@ -228,20 +249,28 @@ def check_once():
 
     current_ids = set()
     new_jobs = []
+    new_counts = {}
+    unhidden = set()
 
     for job in jobs:
         vid = job.get("visitId")
         if vid is None:
             continue
         current_ids.add(vid)
+        count = len(job.get("availableDates") or [])
+        new_counts[str(vid)] = count
         if vid not in seen_ids and not is_first_run:
             new_jobs.append(job)
+        elif old_counts.get(str(vid)) == 0 and count > 0 and not is_first_run:
+            new_jobs.append(job)
+            unhidden.add(vid)
 
     for job in new_jobs:
         fee = get_fee(job)
         symbol = job.get("currencySymbol", "£")
         fee_text = f"Up to {symbol}{fee:g}" if fee is not None else "Fee not shown"
-        title = f"New job: {job.get('clientName', 'Unknown')}"
+        label = "Now available" if job.get("visitId") in unhidden else "New job"
+        title = f"{label}: {job.get('clientName', 'Unknown')}"
         message = (
             f"{job.get('visitName', '')}\n"
             f"{job.get('address1', '')}, {job.get('postCode', '')}\n"
@@ -250,7 +279,7 @@ def check_once():
         send_notification(title, message)
         print("Notified:", title)
 
-        if AUTO_BOOK and bookings_made < MAX_BOOKINGS_PER_RUN:
+        if AUTO_BOOK and bookings_made < MAX_BOOKINGS_PER_RUN and job.get("visitId") not in booked_ids:
             chosen_date = find_booking_date(job)
             if chosen_date:
                 weekday = date.fromisoformat(chosen_date).strftime("%A")
@@ -260,16 +289,72 @@ def check_once():
                     send_notification("Would have booked", details, "eyes")
                 elif book_job(job, chosen_date):
                     bookings_made += 1
+                    booked_ids.add(job.get("visitId"))
+                    save_json(BOOKED_FILE, list(booked_ids))
                     send_notification("BOOKED", details, "white_check_mark")
                 else:
                     send_notification("Booking FAILED", details, "warning")
 
     save_json(STATE_FILE, list(current_ids))
+    save_json(DATES_FILE, new_counts)
 
     if is_first_run:
         print(f"Baseline set with {len(current_ids)} jobs, no alerts sent.")
     else:
         print(f"Checked {len(current_ids)} jobs, {len(new_jobs)} new.")
+
+
+def run_test():
+    today = date.today()
+    earliest = today + timedelta(days=MIN_DAYS_AHEAD)
+
+    def make_dates(days):
+        return [(today + timedelta(days=i)).isoformat() + "T00:00:00" for i in days]
+
+    every_day = make_dates(range(1, 60))
+    monday_only = [d for d in every_day if date.fromisoformat(d[:10]).weekday() == 0]
+    too_soon = make_dates(range(1, MIN_DAYS_AHEAD))
+
+    normal_vendor = WANTED_CLIENTS[0] if WANTED_CLIENTS else "No vendor set"
+    hotel_vendor = WANTED_HOTEL_CLIENTS[0] if WANTED_HOTEL_CLIENTS else "No vendor set"
+
+    def fake(vendor, km, dates, criteria="Visit for 2 adults."):
+        return {
+            "clientName": vendor,
+            "visitId": 0,
+            "visitType": "MV",
+            "criteria": criteria,
+            "distance": km * 1000,
+            "maxDinerReimbursement": 100,
+            "availableDates": dates,
+        }
+
+    cases = [
+        ("Nearby normal job", fake(normal_vendor, 30, every_day), True),
+        ("Normal job too far away", fake(normal_vendor, 200, every_day), False),
+        ("Normal job too soon", fake(normal_vendor, 30, too_soon), False),
+        ("Hotel job, far away, any day", fake(hotel_vendor, 300, every_day, "Includes an overnight stay."), True),
+        ("Hotel job, Mondays only", fake(hotel_vendor, 300, monday_only, "Includes an overnight stay."), False),
+        ("Vendor not on your list", fake("Random Vendor", 30, every_day), False),
+    ]
+
+    lines = []
+    for name, job, should_book in cases:
+        result = find_booking_date(job)
+        ok = (result is not None) == should_book
+        shown = "no booking"
+        if result:
+            day = date.fromisoformat(result)
+            shown = f"{day.strftime('%A')} {result}"
+            if day < earliest:
+                ok = False
+            if is_hotel_job(job) and day.strftime("%A") not in HOTEL_DAYS:
+                ok = False
+        lines.append(f"{'PASS' if ok else 'FAIL'}: {name} -> {shown}")
+
+    for line in lines:
+        print(line)
+    send_notification("Booking rules test", "\n".join(lines), "test_tube")
 
 
 def main():
@@ -291,4 +376,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if "--test" in sys.argv:
+        run_test()
+    else:
+        main()
