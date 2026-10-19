@@ -117,11 +117,15 @@ def send_notification(title, message, tags="bell"):
     if not NTFY_TOPIC:
         print("No NTFY_TOPIC set, skipping notification:", title, message)
         return
-    requests.post(
-        f"https://ntfy.sh/{NTFY_TOPIC}",
-        data=message.encode("utf-8"),
-        headers={"Title": title, "Priority": "high", "Tags": tags},
-    )
+    try:
+        requests.post(
+            f"https://ntfy.sh/{NTFY_TOPIC}",
+            data=message.encode("utf-8"),
+            headers={"Title": title, "Priority": "high", "Tags": tags},
+            timeout=10,
+        )
+    except requests.RequestException as e:
+        print("Could not send notification:", e)
 
 
 def get_fee(job):
@@ -243,8 +247,19 @@ def check_once():
             print("Already notified about expired token today.")
         return
 
-    resp.raise_for_status()
-    jobs = resp.json()
+    if resp.status_code != 200:
+        print("Platform returned an error, skipping this check:", resp.status_code)
+        return
+
+    try:
+        jobs = resp.json()
+    except ValueError:
+        print("Could not read the job list, skipping this check.")
+        return
+
+    if not isinstance(jobs, list):
+        print("Unexpected reply from the platform, skipping this check.")
+        return
 
     is_first_run = not os.path.exists(STATE_FILE)
 
@@ -365,7 +380,10 @@ def main():
     while True:
         run_count += 1
         print(f"--- Check #{run_count} ---")
-        check_once()
+        try:
+            check_once()
+        except Exception as e:
+            print("This check hit a problem, carrying on:", repr(e))
 
         elapsed = time.monotonic() - start
         remaining = TOTAL_RUNTIME_SECONDS - elapsed
