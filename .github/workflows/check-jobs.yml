@@ -11,9 +11,11 @@ permissions:
 concurrency:
   group: check-jobs
   cancel-in-progress: false
+
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -31,13 +33,17 @@ jobs:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           AUTO_BOOK: "on"
           DRY_RUN: "off"
+          TOTAL_RUNTIME_SECONDS: "330"
         run: python check_jobs.py
 
       - name: Commit updated state
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           [ -f seen_jobs.json ] && git add seen_jobs.json
           [ -f auth_status.json ] && git add auth_status.json
+          [ -f job_dates.json ] && git add job_dates.json
+          [ -f booked_jobs.json ] && git add booked_jobs.json
           git diff --quiet --cached || git commit -m "Update seen jobs state"
-          git push
+          git push || (git pull --rebase && git push)
