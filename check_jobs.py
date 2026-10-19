@@ -54,6 +54,7 @@ WANTED_CLIENTS = [
     "The Cut & Craft",
     "Cut & Craft",
     "Lake Vyrnwy Hotel & Spa",
+    "The Evolv Collection",
 ]
 MAX_DISTANCE_KM = 70
 
