@@ -54,7 +54,6 @@ WANTED_CLIENTS = [
     "The Cut & Craft",
     "Cut & Craft",
     "Lake Vyrnwy Hotel & Spa",
-    "The Evolv Collection",
 ]
 MAX_DISTANCE_KM = 70
 
@@ -292,9 +291,9 @@ def check_once():
             f"{job.get('address1', '')}, {job.get('postCode', '')}\n"
             f"{fee_text}"
         )
-        send_notification(title, message)
-        print("Notified:", title)
 
+        # Book first, because speed matters. Tell you straight afterwards.
+        booking_note = None
         if AUTO_BOOK and bookings_made < MAX_BOOKINGS_PER_RUN and job.get("visitId") not in booked_ids:
             chosen_date = find_booking_date(job)
             if chosen_date:
@@ -302,14 +301,19 @@ def check_once():
                 kind = "Hotel overnight stay" if is_hotel_job(job) else "Visit"
                 details = f"{title}\n{message}\n{kind} date: {weekday} {chosen_date}"
                 if DRY_RUN:
-                    send_notification("Would have booked", details, "eyes")
+                    booking_note = ("Would have booked", details, "eyes")
                 elif book_job(job, chosen_date):
                     bookings_made += 1
                     booked_ids.add(job.get("visitId"))
                     save_json(BOOKED_FILE, list(booked_ids))
-                    send_notification("BOOKED", details, "white_check_mark")
+                    booking_note = ("BOOKED", details, "white_check_mark")
                 else:
-                    send_notification("Booking FAILED", details, "warning")
+                    booking_note = ("Booking FAILED", details, "warning")
+
+        send_notification(title, message)
+        print("Notified:", title)
+        if booking_note:
+            send_notification(*booking_note)
 
     save_json(STATE_FILE, list(current_ids))
     save_json(DATES_FILE, new_counts)
