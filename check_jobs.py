@@ -18,7 +18,7 @@ API_URL = (
     "https://production-gateways.hgem.com/diner-gateway/guestservices-visitsapi/AvailableVisits"
     "?CurrentPosition.Latitude=53.263099670410156"
     "&CurrentPosition.Longitude=-2.9160826206207275"
-    "&pageStart=0&pageSize=200&DateFilterType=0&FilterType=0&SortType=0"
+    "&pageStart=0&pageSize=50&DateFilterType=0&FilterType=0&SortType=0"
 )
 BOOK_URL = "https://production-gateways.hgem.com/diner-gateway/guestservices-visitsapi/AvailableVisits/Book"
 
