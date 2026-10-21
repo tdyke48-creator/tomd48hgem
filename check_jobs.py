@@ -84,6 +84,9 @@ WANTED_HOTEL_CLIENTS = [
     "Cameron House",
     "Cameron House On Loch Lomond",
     "Lake Vyrnwy Hotel & Spa",
+    "The Sutton Collection",
+    "Madfabulous Hotels",
+    "Madfabulous Hotels LTD",
 ]
 HOTEL_MAX_DISTANCE_KM = 500    # 0 means no limit at all
 HOTEL_DAYS = ["Friday", "Saturday"]
