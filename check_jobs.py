@@ -76,7 +76,7 @@ WANTED_HOTEL_CLIENTS = [
     "Andrew Brownsword Hotels",
     "Champneys Resorts",
     "Champneys",
-    "Chapneys Hotels",
+    "Champneys Hotels",
     "Firmdale Hotels",
     "Andrew Brownsword",
     "Guest House",
