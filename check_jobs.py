@@ -54,6 +54,13 @@ WANTED_CLIENTS = [
     "The Cut & Craft",
     "Cut & Craft",
     "Lake Vyrnwy Hotel & Spa",
+    "Pranzo Italian",
+    "Pranzo",
+    "Five Star Collection",
+    "Gaucho",
+    "Bills",
+    "Bill's",
+    "Bills restaurant",
 ]
 MAX_DISTANCE_KM = 70
 
@@ -78,6 +85,7 @@ WANTED_HOTEL_CLIENTS = [
     "Champneys",
     "Champneys Hotels",
     "Firmdale Hotels",
+    "Firmdale",
     "Andrew Brownsword",
     "Guest House",
     "Guest House Hotels",
@@ -87,6 +95,7 @@ WANTED_HOTEL_CLIENTS = [
     "The Sutton Collection",
     "Madfabulous Hotels",
     "Madfabulous Hotels LTD",
+    "Distinct Hotels",
 ]
 HOTEL_MAX_DISTANCE_KM = 500    # 0 means no limit at all
 HOTEL_DAYS = ["Friday", "Saturday"]
