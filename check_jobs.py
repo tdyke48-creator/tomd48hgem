@@ -94,9 +94,11 @@ WANTED_HOTEL_CLIENTS = [
     "Guest House Hotels",
     "Cameron House",
     "Cameron House On Loch Lomond",
-    "Lake Vyrnwy Hotel & Spa"
-    "Lewinnick Lodge"
+    "Lake Vyrnwy Hotel & Spa",
+    "Lewinnick Lodge",
     "The Lewinnick Lodge",
+    "Daylesford Stays"
+    "Daylesford"
 ]
 HOTEL_MAX_DISTANCE_KM = 700    # distance limit for hotels on your list above (0 = no limit)
 HOTEL_DAYS = ["Friday", "Saturday"]
