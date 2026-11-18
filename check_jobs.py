@@ -112,7 +112,7 @@ ANY_HOTEL_MAX_KM = 140
 NEVER_BOOK_VENUES = [] # e.g. ["Congleton", "Bakewell"]
 
 # Job numbers you never want booked
-NEVER_BOOK_IDS = [] # e.g. [22886528, 22755799]
+NEVER_BOOK_IDS = [23354486] # e.g. [22886528, 22755799]
 
 # After a venue is booked, don't book that venue again for this many days.
 # This stops a cancelled visit being re-booked. Put 0 to switch off.
