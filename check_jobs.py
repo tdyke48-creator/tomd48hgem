@@ -4,6 +4,7 @@ import sys
 import json
 import time
 import base64
+import traceback
 import requests
 from datetime import date, timedelta
 
@@ -28,6 +29,18 @@ BOOK_URL = "https://production-gateways.hgem.com/diner-gateway/guestservices-vis
 AUTH_TOKEN = os.environ.get("AUTH_TOKEN", "")
 NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "")
 
+
+def flat(items):
+    """Tidies a settings list, so a list accidentally placed inside another list still works."""
+    out = []
+    for x in items:
+        if isinstance(x, (list, tuple)):
+            out.extend(flat(x))
+        else:
+            out.append(str(x))
+    return out
+
+
 # ---------- TOKEN REMINDERS ----------
 TOKEN_WARN_HOURS = 6           # start warning this many hours before the token runs out
 WARN_REPEAT_MINUTES = 60       # how often to repeat the early warning
@@ -46,6 +59,9 @@ WANTED_CLIENTS = [
     "Hotel du Vin",
     "Vapiano",
     "Country Village Inns",
+    "Coaching Inn Group",
+    "The Coaching Inn Group",
+    "Longbow Venues",
     "Troia",
     "Botanist",
     "The Botanist",
@@ -62,6 +78,14 @@ WANTED_CLIENTS = [
     "Pranzo Italian",
 ]
 MAX_DISTANCE_KM = 70
+
+# Individual venues you want from a company WITHOUT approving the whole company.
+# Each entry is (part of the company name, part of the venue name).
+WANTED_VENUES = [
+    ("Gambetta", "San Lorenzo"),
+    ("Gambetta", "Grill on the Square"),
+    ("Gambetta", "The Grill on the Square"),
+]
 
 # The only days normal (non-hotel) visits can be booked for. Put [] to allow any day.
 NORMAL_DAYS = ["Friday", "Saturday", "Sunday"]
@@ -85,7 +109,7 @@ WANTED_HOTEL_CLIENTS = [
     "Andrew Brownsword Hotels",
     "Champneys Resorts",
     "Champneys",
-    "Champneys Hotels",
+    "Chapneys Hotels",
     "Firmdale Hotels",
     "Andrew Brownsword",
     "Guest House",
@@ -93,34 +117,37 @@ WANTED_HOTEL_CLIENTS = [
     "Cameron House",
     "Cameron House On Loch Lomond",
     "Lake Vyrnwy Hotel & Spa",
-    "Lewinnick Lodge",
-    "The Lewinnick Lodge",
-    "Daylesford Stays"
-    "Daylesford"
 ]
-HOTEL_MAX_DISTANCE_KM = 700    # distance limit for hotels on your list above (0 = no limit)
+HOTEL_MAX_DISTANCE_KM = 500    # distance limit for hotels on your list above (0 = no limit)
 HOTEL_DAYS = ["Friday", "Saturday"]
 
 # ANY overnight stay, from ANY vendor, is also booked if it is within this many km
 # (straight line, roughly a two hour drive). Put 0 to switch this off.
 ANY_HOTEL_MAX_KM = 140
 
-# Venues you never want booked automatically (part of the venue name is enough,
-# copy it from the second line of an alert)
-NEVER_BOOK_VENUES = [] # e.g. ["Congleton", "Bakewell"]
+# Venues you never want booked automatically. Put part of the venue name (copied
+# from the second line of an alert) between the brackets, each in its own quote marks.
+# This always wins over every list above.
+NEVER_BOOK_VENUES = ["Las Ramblas"]
 
 # Job numbers you never want booked
-NEVER_BOOK_IDS = [23354486] # e.g. [22886528, 22755799]
+NEVER_BOOK_IDS = []
 
 # After a venue is booked, don't book that venue again for this many days.
 # This stops a cancelled visit being re-booked. Put 0 to switch off.
-VENUE_COOLDOWN_DAYS = 5
+VENUE_COOLDOWN_DAYS = 28
 
 # Applies to everything
 MIN_DAYS_AHEAD = 11            # only book visits at least this many days away
 MIN_REIMBURSEMENT = 0          # 0 means any fee
 WANTED_VISIT_TYPES = []        # optional. "MV" = visit, "DA" = delivery assessment
 # --------------------------------------------------------
+
+WANTED_CLIENTS = flat(WANTED_CLIENTS)
+WANTED_HOTEL_CLIENTS = flat(WANTED_HOTEL_CLIENTS)
+NEVER_BOOK_VENUES = flat(NEVER_BOOK_VENUES)
+NORMAL_DAYS = flat(NORMAL_DAYS)
+HOTEL_DAYS = flat(HOTEL_DAYS)
 
 bookings_made = 0
 
@@ -150,6 +177,20 @@ def send_notification(title, message, tags="bell", priority="high"):
         )
     except requests.RequestException as e:
         print("Could not send notification:", e)
+
+
+def alert_script_problem(e):
+    """Sends you a phone alert if the script keeps hitting an error (at most once an hour)."""
+    status = load_json(AUTH_STATUS_FILE, {})
+    if time.time() - status.get("last_error_ts", 0) < 60 * 60:
+        return
+    send_notification(
+        "Job checker has a problem",
+        f"The script hit an error and may not be alerting you: {e!r}. Check the Actions log.",
+        "warning",
+    )
+    status["last_error_ts"] = time.time()
+    save_json(AUTH_STATUS_FILE, status)
 
 
 def token_seconds_left():
@@ -201,6 +242,16 @@ def on_list(job, names):
     """True if the job's client name matches anything in the given list."""
     client = (job.get("clientName") or "").lower()
     return any(w.lower() in client for w in names)
+
+
+def venue_on_wanted_list(job):
+    """True if the job is one of the individual venues you approved."""
+    client = (job.get("clientName") or "").lower()
+    venue = (job.get("visitName") or "").lower()
+    return any(
+        (c.lower() in client or c.lower() in venue) and v.lower() in venue
+        for c, v in WANTED_VENUES
+    )
 
 
 def venue_on_cooldown(job, venues):
@@ -277,7 +328,7 @@ def find_booking_date(job):
     else:
         allowed_days = NORMAL_DAYS or None
         max_km = MAX_DISTANCE_KM
-        if not on_list(job, WANTED_CLIENTS):
+        if not (on_list(job, WANTED_CLIENTS) or venue_on_wanted_list(job)):
             return None
 
     for name, km in VENDOR_MAX_KM.items():
@@ -463,9 +514,10 @@ def run_test():
     hotel_vendor = WANTED_HOTEL_CLIENTS[0] if WANTED_HOTEL_CLIENTS else "No vendor set"
     stay = "Includes an overnight stay."
 
-    def fake(vendor, km, dates, criteria="Visit for 2 adults."):
+    def fake(vendor, km, dates, criteria="Visit for 2 adults.", venue="Test Venue"):
         return {
             "clientName": vendor,
+            "visitName": venue,
             "visitId": 0,
             "visitType": "MV",
             "criteria": criteria,
@@ -487,6 +539,9 @@ def run_test():
         ("Vendor not on your list", fake("Random Vendor", 30, every_day), False),
         ("Unlisted hotel, 100km away", fake("Random Hotel Co", 100, every_day, stay), near_ok),
         ("Unlisted hotel, 300km away", fake("Random Hotel Co", 300, every_day, stay), False),
+        ("Gambetta San Lorenzo", fake("Gambetta", 25, every_day, venue="Gambetta - San Lorenzo, Warrington"), True),
+        ("Gambetta Grill on the Square", fake("Gambetta", 25, every_day, venue="Gambetta - The Grill on The Square, Warrington"), True),
+        ("Gambetta Las Ramblas", fake("Gambetta", 25, every_day, venue="Gambetta - Las Ramblas, Warrington"), False),
     ]
 
     lines = []
@@ -525,6 +580,11 @@ def main():
             check_once()
         except Exception as e:
             print("This check hit a problem, carrying on:", repr(e))
+            traceback.print_exc()
+            try:
+                alert_script_problem(e)
+            except Exception:
+                pass
 
         elapsed = time.monotonic() - start
         remaining = TOTAL_RUNTIME_SECONDS - elapsed
